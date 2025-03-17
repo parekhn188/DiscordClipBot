@@ -1,4 +1,6 @@
 import { verifyKey } from 'discord-interactions';
+import { insertClipData } from './db.js';
+import uploadQueue from './bgQ.js';
 
 export function verifyDiscRequest(clientKey) {
   return function (req, res) {
@@ -37,8 +39,6 @@ export async function DiscordRequest(endpoint, options) {
     console.log(res.status);
     throw new Error(JSON.stringify(data));
   }
-  // return original response
-  // console.log(res);
   return res;
 }
 
@@ -52,4 +52,27 @@ export async function InstallGlobalCommands(appId, commands) {
   } catch (err) {
     console.error(err);
   }
+}
+
+export async function handleResponse(...args) {
+  if (args.some((arg) => arg === undefined)) {
+    return 'One or more function inputs are undefined';
+  }
+
+  const [url, description, tag, timestamp, submitter, messageid] = args;
+
+  // Q up clip upload
+  const clipUploadJob = uploadQueue.add({ url, messageid });
+  console.log(`clip upload job ${clipUploadJob.id} queued`);
+
+  const _ = await insertClipData(
+    `${process.env.AWS_ENDPOINT}/clips/${messageid}.mp4`,
+    description,
+    tag,
+    timestamp,
+    submitter,
+    messageid
+  );
+
+  return `inserted clip with id ${messageid}, label: ${description}`;
 }
